@@ -138,6 +138,7 @@ def procesar_clave(driver, clave, datos_tabla, pdf_urls):
 # Configuración de Selenium
 options = webdriver.ChromeOptions()
 options.add_argument('--disable-gpu')
+options.add_argument('--headless')
 options.add_experimental_option('prefs', {
     "plugins.always_open_pdf_externally": True,
     "download.default_directory": script_folder,
