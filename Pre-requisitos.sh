@@ -1,17 +1,11 @@
-#!/bin/bash
 
-# Obtener la ubicación actual del script
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-
-
-# Instalar Google Chrome
 wget "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
 sudo dpkg -i google-chrome-stable_current_amd64.deb
 
 # Obtener la versión más reciente del Chrome Driver
 wget "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/116.0.5845.96/linux64/chromedriver-linux64.zip"
 
-unzip -o "chromedriver_linux64.zip" -d "$SCRIPT_DIR"
+unzip -o "chromedriver_linux64.zip" 
 chmod +x "chromedriver_linux64/chromedriver"
 
 echo "listo"
