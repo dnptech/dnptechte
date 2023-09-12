@@ -1,10 +1,8 @@
 import os
 import time
-import glob
-import shutil
 import psycopg2
+import glob
 import pandas as pd
-from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -12,7 +10,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import StaleElementReferenceException
+import shutil
 
 # Parámetros de configuración
 expedientes_a_procesar = 500  # Cantidad de expedientes a procesar
@@ -20,7 +19,7 @@ output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdf_files
 db_params = {
     "dbname": "postgres",
     "user": "postgres",
-    "password": "noob",
+    "password": "",
     "host": "localhost",
     "port": "5432"
 }
@@ -29,7 +28,7 @@ db_params = {
 options = webdriver.ChromeOptions()
 options.add_argument('--disable-gpu')
 options.add_argument('--no-sandbox')
-options.add_argument('--headless=new')      
+   
 # Configuración de preferencias de Chrome
 chrome_prefs = {
     "plugins.always_open_pdf_externally": True,
@@ -43,8 +42,6 @@ chrome_prefs = {
     "disable-dev-shm-usage": True,
 }
 options.add_experimental_option('prefs', chrome_prefs)
-chrome_driver_path = "/usr/bin/chromedriver"
-options.binary_location = "/usr/bin/google-chrome"
 driver = webdriver.Chrome(options=options)
 
 
@@ -52,7 +49,7 @@ driver = webdriver.Chrome(options=options)
 
 def procesar_contenedor_pdf(driver):
     try:
-        WebDriverWait(driver, 1).until(
+        WebDriverWait(driver,5).until(
             EC.presence_of_element_located(
                 (By.XPATH, '//*[@id="mat-dialog-13" or starts-with(@id, "/html/body/div[2]/div[6]/div/mat-dialog-container/iol-actuaciones-adjuntos")] | //div[@class="cdk-overlay-backdrop cdk-overlay-dark-backdrop cdk-overlay-backdrop-showing"]')
             )
@@ -100,7 +97,7 @@ def obtener_ultimo_id_ocupado():
 
 
 def get_last_filename_and_rename(save_folder, id_registro, numero_serie, tipo_archivo, fila_index, pagina, renombrados):
-    time.sleep(2)  # Pausa de 1 segundo antes de continuar
+    time.sleep(10)  # Pausa de 1 segundo antes de continuar
     files = glob.glob(save_folder + '/*')
     if not files:
         return None
@@ -148,21 +145,13 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
 
     # Esperar a que se cargue el elemento específico
     wait = WebDriverWait(driver, 10)
-    try:
-        elemento_especifico = wait.until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="alto-app"]/div[2]/mat-sidenav-container/mat-sidenav-content/div/iol-expediente-lista/div/div/div[2]/iol-expediente-tarjeta/div/iol-expediente-tarjeta-encabezado/div/div[2]/div/a/strong')))
-        elemento_especifico.click()
-    except TimeoutException:
-        print(f"Elemento específico no encontrado para la clave {clave}.")
-        return  # Salir de la función si el elemento no se encuentra
+    elemento_especifico = wait.until(
+        EC.presence_of_element_located((By.XPATH, '//*[@id="alto-app"]/div[2]/mat-sidenav-container/mat-sidenav-content/div/iol-expediente-lista/div/div/div[2]/iol-expediente-tarjeta/div/iol-expediente-tarjeta-encabezado/div/div[2]/div/a/strong')))
+    elemento_especifico.click()
 
     # Hacer clic en la pestaña de Actuaciones
-    try:
-        pestaña_actuaciones = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="mat-tab-label-0-1"]/div')))
-        pestaña_actuaciones.click()
-    except TimeoutException:
-        print("Pestaña de Actuaciones no encontrada.")
-        return  # Salir de la función si la pestaña no se encuentra
+    pestaña_actuaciones = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="mat-tab-label-0-1"]/div')))
+    pestaña_actuaciones.click()
 
     pagina = 1
     while True:
@@ -178,7 +167,7 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
             numero_serie_ac = 1
 
             # Añadir un segundo de espera entre cada clic
-            time.sleep(2)
+            time.sleep(0.5)
 
             try:
                 elemento_adjunto = fila.find_element(By.XPATH, './/i[@mattooltip="Adjunto"]')
@@ -189,17 +178,17 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
                     actions.click()
                     actions.perform()
                     procesar_contenedor_pdf(driver)
-                    time.sleep(2)
+                    time.sleep(0.5)
                     # Lógica para procesar archivos adjuntos (AD)
                     tipo_archivo = "AD"  # Es un adjunto
 
                     # Obtener el nombre del archivo más reciente en la carpeta de salida y renombrarlo
                     nombre_archivo = get_last_filename_and_rename(output_dir, id_registro_actual, numero_serie_ad, tipo_archivo, fila_index, pagina, renombrados)
-                    time.sleep(2)
+                    time.sleep(1)
                     # Agregar el nombre del archivo renombrado a la lista datos_fila
                     datos_fila = fila.find_elements(By.TAG_NAME, 'mat-cell')
                     datos_fila = [dato.text for dato in datos_fila if dato.text not in ['description', 'attach_file']]
-                    time.sleep(2)  # Pausa de 1 segundo antes de continuar
+                    time.sleep(0.5)  # Pausa de 1 segundo antes de continuar
                     # Agregar la clave al principio de la fila
                     datos_fila.insert(0, clave)
                     # Agregar el nombre del archivo renombrado
@@ -217,6 +206,7 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
                     actions.move_to_element_with_offset(elemento_actuacion, 5, 5)  # Mover el cursor al centro del elemento
                     actions.click()
                     actions.perform()
+                    procesar_contenedor_pdf(driver)
                     driver.switch_to.window(driver.window_handles[0])
 
                     # Lógica para procesar archivos de Actuaciones (AC)
@@ -224,11 +214,11 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
 
                     # Obtener el nombre del archivo más reciente en la carpeta de salida y renombrarlo
                     nombre_archivo = get_last_filename_and_rename(output_dir, id_registro_actual, numero_serie_ac, tipo_archivo, fila_index, pagina, renombrados)
-                    time.sleep(2)
+                    time.sleep(1)
                     # Agregar el nombre del archivo renombrado a la lista datos_fila
                     datos_fila = fila.find_elements(By.TAG_NAME, 'mat-cell')
                     datos_fila = [dato.text for dato in datos_fila if dato.text not in ['description', 'attach_file']]
-                    time.sleep(2)  # Pausa de 1 segundo antes de continuar
+                    time.sleep(0.5)  # Pausa de 1 segundo antes de continuar
                     # Agregar la clave al principio de la fila
                     datos_fila.insert(0, clave)
                     # Agregar el nombre del archivo renombrado
@@ -254,11 +244,10 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
             driver.execute_script("arguments[0].scrollIntoView();", boton_siguiente)
             boton_siguiente.click()
             pagina += 1
-            time.sleep(2)  # Pausa de 1 segundo antes de continuar
+            time.sleep(1)  # Pausa de 1 segundo antes de continuar
 
         except Exception as e:
             # Si no se encuentra el botón "Siguiente" o no es cliclable, salimos del bucle
-            print("No se pudo avanzar a la siguiente página:", str(e))
             break
             
 def asociar_archivos_a_registros(db_params, db_folder, renombrados):
@@ -322,27 +311,31 @@ def insertar_datos_en_db(db_params, clave, datos_tabla):
             cuij = row[0]  # Clave
             titulo = row[1]
             numero = row[2]
-            firmantes = row[4]
             fecha_firma = row[3]
-            fecha_diligenciamiento = row[6]
+            firmantes = row[4]
+            fecha_diligenciamiento = row[7]
 
-            # Verificar si el campo fecha_diligenciamento es una fecha válida
-            try:
-                fecha_diligenciamiento = datetime.strptime(fecha_diligenciamiento, '%d/%m/%Y %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
-            except ValueError:
-                fecha_diligenciamiento = None
+            # Validar que la fecha de diligenciamiento no esté vacía y tenga un formato válido antes de insertarla
+            if fecha_diligenciamiento and fecha_diligenciamiento.strip():
+                # Insertar la fecha en el formato adecuado en la base de datos
+                try:
+                    fecha_diligenciamiento = pd.to_datetime(fecha_diligenciamiento, format='%d/%m/%Y').date()
+                except ValueError:
+                    fecha_diligenciamiento = None  # O establece la fecha como None si el formato es incorrecto
+            else:
+                fecha_diligenciamiento = None  # O establece la fecha como None si está vacía
 
             # Insertar datos en la tabla "public.novedades"
             insert_novedades_query = """
-            INSERT INTO public.novedades (cuij, titulo, numero, firmantes, fecha_firma,fecha_diligenciamiento)
+            INSERT INTO public.novedades (cuij, titulo, numero, fecha_firma, firmantes, fecha_diligenciamiento)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;
             """
             values_novedades = (
                 cuij,
                 titulo,
                 numero,
-                firmantes,
                 fecha_firma,
+                firmantes,
                 fecha_diligenciamiento
             )
             cursor.execute(insert_novedades_query, values_novedades)
