@@ -28,7 +28,8 @@ db_params = {
 options = webdriver.ChromeOptions()
 options.add_argument('--disable-gpu')
 options.add_argument('--no-sandbox')
-   
+options.add_argument("window-size=1920,1080")
+options.add_argument("headless=new")
 # Configuración de preferencias de Chrome
 chrome_prefs = {
     "plugins.always_open_pdf_externally": True,
@@ -49,7 +50,7 @@ driver = webdriver.Chrome(options=options)
 
 def procesar_contenedor_pdf(driver):
     try:
-        WebDriverWait(driver,5).until(
+        WebDriverWait(driver, 1).until(
             EC.presence_of_element_located(
                 (By.XPATH, '//*[@id="mat-dialog-13" or starts-with(@id, "/html/body/div[2]/div[6]/div/mat-dialog-container/iol-actuaciones-adjuntos")] | //div[@class="cdk-overlay-backdrop cdk-overlay-dark-backdrop cdk-overlay-backdrop-showing"]')
             )
@@ -60,7 +61,12 @@ def procesar_contenedor_pdf(driver):
         enlaces_pdf = driver.find_elements(By.XPATH, './/a[contains(translate(text(), "PDF", "pdf"), ".pdf")]')
 
         for enlace in enlaces_pdf:
-            enlace.click()
+            try:
+                # Intento hacer clic utilizando el método regular
+                enlace.click()
+            except:
+                # Si falla, intento hacer clic usando JavaScript
+                driver.execute_script("arguments[0].click();", enlace)
             print(f"Contenedor detectado, procesando filas...")
             time.sleep(5)
 
@@ -71,11 +77,10 @@ def procesar_contenedor_pdf(driver):
         driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
 
     except NoSuchElementException:
-        # If there is no container, do nothing (suppress the exception)
+        # Si no hay contenedor, no hacer nada (suprimir la excepción)
         pass
     except Exception as e:
-        print("Este Adjunto no usa contenedor")
-        pass
+        print(f"Objeto sin contenedor")
 
 def obtener_ultimo_id_ocupado():
     try:
@@ -97,7 +102,7 @@ def obtener_ultimo_id_ocupado():
 
 
 def get_last_filename_and_rename(save_folder, id_registro, numero_serie, tipo_archivo, fila_index, pagina, renombrados):
-    time.sleep(10)  # Pausa de 1 segundo antes de continuar
+    time.sleep(2)  # Pausa de 1 segundo antes de continuar
     files = glob.glob(save_folder + '/*')
     if not files:
         return None
@@ -170,12 +175,14 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
             time.sleep(0.5)
 
             try:
+                    
                 elemento_adjunto = fila.find_element(By.XPATH, './/i[@mattooltip="Adjunto"]')
                 if elemento_adjunto:
                     # Usar acciones de Selenium para hacer clic en un área específica del elemento <i>
                     actions = ActionChains(driver)
                     actions.move_to_element_with_offset(elemento_adjunto, 5, 5)  # Mover el cursor al centro del elemento
                     actions.click()
+
                     actions.perform()
                     procesar_contenedor_pdf(driver)
                     time.sleep(0.5)
@@ -206,7 +213,6 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
                     actions.move_to_element_with_offset(elemento_actuacion, 5, 5)  # Mover el cursor al centro del elemento
                     actions.click()
                     actions.perform()
-                    procesar_contenedor_pdf(driver)
                     driver.switch_to.window(driver.window_handles[0])
 
                     # Lógica para procesar archivos de Actuaciones (AC)
@@ -244,8 +250,12 @@ def procesar_clave(driver, clave, datos_tabla, output_dir):
             driver.execute_script("arguments[0].scrollIntoView();", boton_siguiente)
             boton_siguiente.click()
             pagina += 1
+            
+            # Mover el scroll al inicio de la página
+            driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.UP) 
+            
             time.sleep(1)  # Pausa de 1 segundo antes de continuar
-
+            
         except Exception as e:
             # Si no se encuentra el botón "Siguiente" o no es cliclable, salimos del bucle
             break
